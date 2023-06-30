@@ -17,15 +17,13 @@ from metric_utils import load_image_cv2, load_image_pil, calc_dtm_score
 
 
 def eval_image(pred_img_path: str, gold_img_path: str) -> Dict:
-    evals = {}
     # load images
     pred_img_cv2, gold_img_cv2 = load_image_cv2(pred_img_path), load_image_cv2(gold_img_path)
     pred_img_pil, gold_img_pil = load_image_pil(pred_img_path), load_image_pil(gold_img_path)
 
     # calculate negated RMSE (↑)
     rmse_val = - rmse(pred_img_cv2, gold_img_cv2)
-    evals["rmse"] = rmse_val
-
+    evals = {"rmse": rmse_val}
     # calculate Structural Similarity (↑)    
     ssim_val = ssim(pred_img_cv2, gold_img_cv2)
     evals["ssim"] = ssim_val
@@ -83,8 +81,8 @@ def visualize_ranked_results(sorted_dict: str, met_name: str, output_folder: str
         image = Image.open(pred_img_path)
         ax[i][1].imshow(image)
         ax[i][1].axis('off')
-        ax[i][1].set_title("{} ".format(score))
-        #ax[i][1].set_title("{} gt: {}".format(id, score))
+        ax[i][1].set_title(f"{score} ")
+            #ax[i][1].set_title("{} gt: {}".format(id, score))
 
     fig_name = os.path.join(output_folder, f"{met_name}.png")
     plt.savefig(fig_name)
@@ -96,25 +94,26 @@ if __name__ == "__main__":
     pred_img_pathes = [os.path.join(pred_img_folder, f) for f in os.listdir(pred_img_folder) if ".png" in f]
     gold_img_folder =  "../images_rendered/images_gold" #"../images_rendered_html/images_gold"
     output_folder = "html_visualization"
-    
+
     results = []
     for pred_img_path in pred_img_pathes:
         img_id = os.path.basename(pred_img_path).replace(".png", "")
-        gold_img_path = "{}/{}.png".format(gold_img_folder, img_id)
+        gold_img_path = f"{gold_img_folder}/{img_id}.png"
         eval = eval_image(pred_img_path, gold_img_path)
         eval["meta_data"] = (img_id, pred_img_path, gold_img_path)
         results.append(eval)
-        print("{}: {}".format(img_id, eval))
+        print(f"{img_id}: {eval}")
 
     # create ranking according to metrics
     for met_name in ["rmse", "ssim", "clip", "psnr", "uqi", "ssim", "ergas", "scc", "rase", "sam", "vifp", "dtw_euclidean", "dtw_euclidean_translation_invariant"]:
-        eval_dicts = {}
-        for r in results:
-            if met_name in r:
-                eval_dicts[r["meta_data"]] = r[met_name]
-        
-        if len(eval_dicts) > 0:
-            sorted_eval_dicts = {k: v for k, v in sorted(eval_dicts.items(), key=lambda item: item[1], reverse=True)}
+        if eval_dicts := {
+            r["meta_data"]: r[met_name] for r in results if met_name in r
+        }:
+            sorted_eval_dicts = dict(
+                sorted(
+                    eval_dicts.items(), key=lambda item: item[1], reverse=True
+                )
+            )
             visualize_ranked_results(sorted_eval_dicts, met_name, output_folder)
 
     

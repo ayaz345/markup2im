@@ -9,7 +9,7 @@ import torch.nn.functional as F
 
 from torch.utils.data._utils.collate import default_collate
 from torchvision import transforms
-from datasets import load_dataset 
+from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModel
 from diffusers import DDPMScheduler
 from diffusers import DDPMPipeline
@@ -17,7 +17,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 from accelerate import Accelerator
 from tqdm.auto import tqdm
 
-sys.path.insert(0, '%s'%os.path.join(os.path.dirname(__file__), '../src/'))
+sys.path.insert(0, f"{os.path.join(os.path.dirname(__file__), '../src/')}")
 from markup2im_constants import get_image_size, get_input_field, get_encoder_model_type, get_color_mode
 from markup2im_models import create_image_decoder, encode_text, save_model
 
@@ -125,8 +125,7 @@ def process_args(args):
                         type=int, default=1234,
                         help=('Random seed for data loader. Shouldn\'t be changed to be comparable to numbers reported in the paper.'
                         ))
-    parameters = parser.parse_args(args)
-    return parameters
+    return parser.parse_args(args)
 
 def train(train_dataloader, save_dir, save_model_every, \
         text_encoder, image_decoder, noise_scheduler, \
@@ -227,8 +226,8 @@ def train(train_dataloader, save_dir, save_model_every, \
 def main(args):
     # Check arguments
     assert len(args.scheduled_sampling_weights_start) == len(args.scheduled_sampling_weights_end)
-    assert all([0 <= item <= 1 for item in args.scheduled_sampling_weights_start])
-    assert all([0 <= item <= 1 for item in args.scheduled_sampling_weights_end])
+    assert all(0 <= item <= 1 for item in args.scheduled_sampling_weights_start)
+    assert all(0 <= item <= 1 for item in args.scheduled_sampling_weights_end)
     assert sum(args.scheduled_sampling_weights_start) <= 1
     assert sum(args.scheduled_sampling_weights_end) <= 1
     # Get default arguments
@@ -259,23 +258,19 @@ def main(args):
         print (f'Using default color mode for dataset {args.dataset_name}')
         color_mode = get_color_mode(args.dataset_name)
         print (f'Default color mode: {color_mode}')
-    args.color_mode = color_mode 
+    args.color_mode = color_mode
     assert args.color_mode in ['grayscale', 'rgb']
-    if args.color_mode == 'grayscale':
-        args.color_channels = 1
-    else:
-        args.color_channels = 3
-
+    args.color_channels = 1 if args.color_mode == 'grayscale' else 3
     # Load data
     dataset = load_dataset(args.dataset_name, split=args.split)
     dataset = dataset.shuffle(seed=args.seed1)
-   
+
     # Load input tokenizer
     tokenizer = AutoTokenizer.from_pretrained(args.encoder_model_type)
 
     # Load input encoder
     text_encoder = AutoModel.from_pretrained(args.encoder_model_type).cuda()
-  
+
     # Preprocess data to form batches
     transform_list = []
     if args.color_mode == 'grayscale':
@@ -291,21 +286,21 @@ def main(args):
         input_ids = example['input_ids']
         attention_mask = example['attention_mask']
         return input_ids, attention_mask
-    
+
     def transform(examples):
         images = [preprocess_image(image.convert("RGB")) for image in examples["image"]]
-        gold_images = [image for image in examples["image"]]
+        gold_images = list(examples["image"])
         formulas_and_masks = [preprocess_formula(formula) for formula in examples[args.input_field]]
         formulas = [item[0] for item in formulas_and_masks]
         masks = [item[1] for item in formulas_and_masks]
         filenames = examples['filename']
         return {'images': images, 'input_ids': formulas, 'attention_mask': masks, 'filenames': filenames, 'gold_images': gold_images}
-    
+
     dataset.set_transform(transform)
 
     def collate_fn(examples):
         eos_id = tokenizer.encode(tokenizer.eos_token)[0] # legacy code, might be unnecessary
-        max_len = max([len(example['input_ids']) for example in examples]) + 1
+        max_len = max(len(example['input_ids']) for example in examples) + 1
         examples_out = []
         for example in examples:
             example_out = {}
@@ -320,9 +315,9 @@ def main(args):
         filenames = [example['filenames'] for example in examples]
         gold_images = [example['gold_images'] for example in examples]
         batch['filenames'] = filenames
-        batch['gold_images'] = gold_images 
+        batch['gold_images'] = gold_images
         return batch
-    
+
     torch.manual_seed(args.seed2)
     random.seed(args.seed2)
     np.random.seed(args.seed2)
@@ -336,7 +331,7 @@ def main(args):
     # forward a fake batch to figure out cross_attention_dim
     hidden_states = encode_text(text_encoder, torch.zeros(1,1).long().cuda(), None)
     cross_attention_dim = hidden_states.shape[-1]
-   
+
     image_decoder = create_image_decoder(image_size=args.image_size, color_channels=args.color_channels, \
             cross_attention_dim=cross_attention_dim)
     image_decoder = image_decoder.cuda()

@@ -3,7 +3,7 @@ import torch
 from diffusers import UNet2DConditionModel
 
 def create_image_decoder(image_size, color_channels, cross_attention_dim):
-    image_decoder = UNet2DConditionModel(
+    return UNet2DConditionModel(
         sample_size=image_size,
         in_channels=color_channels,
         out_channels=color_channels,
@@ -12,23 +12,22 @@ def create_image_decoder(image_size, color_channels, cross_attention_dim):
         down_block_types=(
             "DownBlock2D",
             "DownBlock2D",
-            "CrossAttnDecoderPositionEncoderPositionDownBlock2D", 
             "CrossAttnDecoderPositionEncoderPositionDownBlock2D",
             "CrossAttnDecoderPositionEncoderPositionDownBlock2D",
             "CrossAttnDecoderPositionEncoderPositionDownBlock2D",
-        ), 
+            "CrossAttnDecoderPositionEncoderPositionDownBlock2D",
+        ),
         up_block_types=(
             "CrossAttnDecoderPositionEncoderPositionUpBlock2D",
             "CrossAttnDecoderPositionEncoderPositionUpBlock2D",
             "CrossAttnDecoderPositionEncoderPositionUpBlock2D",
             "CrossAttnDecoderPositionEncoderPositionUpBlock2D",
             "UpBlock2D",
-            "UpBlock2D" 
-          ),
-          cross_attention_dim=cross_attention_dim,
-          mid_block_type='UNetMidBlock2DCrossAttnDecoderPositionEncoderPosition'
+            "UpBlock2D",
+        ),
+        cross_attention_dim=cross_attention_dim,
+        mid_block_type='UNetMidBlock2DCrossAttnDecoderPositionEncoderPosition',
     )
-    return image_decoder
 
 def encode_text(text_encoder, input_ids, attention_mask, no_grad=True):
     if no_grad:

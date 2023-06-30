@@ -84,20 +84,14 @@ dataset.set_transform(transform)
 eos_id = tokenizer.encode(tokenizer.eos_token)[0]
 def collate_fn(examples):
     #import pdb; pdb.set_trace()
-    max_len = max([len(example['input_ids']) for example in examples]) + 1
+    max_len = max(len(example['input_ids']) for example in examples) + 1
     for example in examples:
         orig_len = len(example['input_ids'])
         formula = example['input_ids'] + [eos_id,] * (max_len - orig_len)
         example['input_ids'] = torch.LongTensor(formula)
         attention_mask = example['attention_mask'] + [1,] + [0,] * (max_len - orig_len - 1)
         example['attention_mask'] = torch.LongTensor(attention_mask)
-    batch = default_collate(examples)
-    #for k in batch:
-    #    v = batch[k]
-    #    if k != 'images':
-    #        import pdb; pdb.set_trace()
-    #        batch[k] = torch.LongTensor(v)
-    return batch
+    return default_collate(examples)
 
 torch.manual_seed(1234)
 import random
@@ -302,7 +296,7 @@ model, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
     )
 pipeline = DDPMPipeline(unet=accelerator.unwrap_model(model), scheduler=noise_scheduler)
 repo = init_git_repo(config, at_init=True)
-push_to_hub(config, pipeline, repo, commit_message=f"init", blocking=True)
+push_to_hub(config, pipeline, repo, commit_message="init", blocking=True)
 
 #evaluate(config, 0, pipeline)
 

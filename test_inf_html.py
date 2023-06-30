@@ -104,7 +104,7 @@ def preprocess_formula(formula):
 
 def transform(examples):
     images = [preprocess(image.convert("RGB")) for image in examples["image"]]
-    gold_images = [image for image in examples["image"]]
+    gold_images = list(examples["image"])
     formulas_and_masks = [preprocess_formula(formula) for formula in examples['formula']]
     formulas = [item[0] for item in formulas_and_masks]
     masks = [item[1] for item in formulas_and_masks]
@@ -117,13 +117,12 @@ dataset.set_transform(transform)
 eos_id = tokenizer.encode(tokenizer.eos_token)[0]
 def collate_fn(examples):
     #import pdb; pdb.set_trace()
-    max_len = max([len(example['input_ids']) for example in examples]) + 1
+    max_len = max(len(example['input_ids']) for example in examples) + 1
     examples_out = []
     for example in examples:
-        example_out = {}
         orig_len = len(example['input_ids'])
         formula = example['input_ids'] + [eos_id,] * (max_len - orig_len)
-        example_out['input_ids'] = torch.LongTensor(formula)
+        example_out = {'input_ids': torch.LongTensor(formula)}
         attention_mask = example['attention_mask'] + [1,] + [0,] * (max_len - orig_len - 1)
         example_out['attention_mask'] = torch.LongTensor(attention_mask)
         example_out['images'] = example['images']
@@ -132,7 +131,7 @@ def collate_fn(examples):
     filenames = [example['filenames'] for example in examples]
     gold_images = [example['gold_images'] for example in examples]
     batch['filenames'] = filenames
-    batch['gold_images'] = gold_images 
+    batch['gold_images'] = gold_images
     #for k in batch:
     #    v = batch[k]
     #    if k != 'images':
@@ -253,12 +252,6 @@ def evaluate(config, epoch, pipeline):
             gold_image.save(os.path.join(gold_dir, filename))
             pred_image.save(os.path.join(pred_dir, filename))
         break
-
-        # Make a grid out of the images
-        #image_grid = make_grid(images, rows=batch_size, cols=1)
-
-        #image_grid.save(f"{test_dir}/swap_{swap_step}.png")
-        print ('='*10)
         #break
 
 

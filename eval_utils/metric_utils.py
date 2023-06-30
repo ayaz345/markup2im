@@ -7,23 +7,18 @@ from IPython import embed
 
 
 def load_image_cv2(img_path: str) -> np.array:
-    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    return img
+    return cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
 
 def load_image_pil(img_path: str) -> np.array:
-    img = Image.open(img_path)
-    return img
+    return Image.open(img_path)
 
 def get_column_features(img: np.array, th = 150):
     # check the image is grayscale
     assert(len(img.shape) == 2)
-    features = []
     binary_img = (img < th).astype(int)
     #cv2.imwrite("img.png", img )
     cv2.imwrite("gt.png", binary_img * 255)
-    for c in range(binary_img.shape[1]):
-        features.append(binary_img[:, c])
-    return features
+    return [binary_img[:, c] for c in range(binary_img.shape[1])]
 
 def euclidean_dist_translation_invariant(x, y):
     '''
@@ -31,13 +26,10 @@ def euclidean_dist_translation_invariant(x, y):
     '''
     num_rows = x.shape[0]
     slack = int(np.floor(num_rows * 0.1))
-    dists = []
-
     # no translation
     diff = (x - y) ** 2
     dist = np.sum(diff)
-    dists.append(dist)
-    
+    dists = [dist]
     if dist != 0.:
         # translate x downward (up to 10%)
         for s in range(1, slack+1):
@@ -58,15 +50,12 @@ from numba import njit, prange
 def euclidean_dist_translation_invariant_faster(x, y):
     num_rows = x.shape[0]
     slack = int(np.floor(num_rows * 0.1))
-    dists = []
-
     # no translation
     dist = 0.
     for di in range(x.shape[0]):
         diff = (x[di] - y[di])
         dist += diff * diff
-    dists.append(dist)
-
+    dists = [dist]
     if dist != 0.:
         # translate x downward (up to 10%)
         for s in range(1, slack+1):
@@ -92,12 +81,10 @@ def dot_product(x, y):
     '''
     the difference from euclidiean distance is that each feature is normalized.
     '''
-    cost = 0.
-    return cost
+    return 0.
 
 def dot_product_translation_invariant(x, y):
-    cost = 0.
-    return cost
+    return 0.
 
 dist_metrics = {
     "euc_tsinv": euclidean_dist_translation_invariant_faster,
