@@ -26,12 +26,13 @@ def process_args(args):
                         type=int, default=-1,
                         help=('Saves intermediate diffusion steps every this many steps. When <0 does not save any intermediate images.'
                         ))
-    parameters = parser.parse_args(args)
-    return parameters
+    return parser.parse_args(args)
 
 def main(args):
     filenames = glob.glob(os.path.join(args.input_dir, f'images_pred/{args.select_filename}_*'))
-    assert len(filenames) > 0, f'Please make sure that the input folder contains images with prefix {args.select_filename}'
+    assert (
+        filenames
+    ), f'Please make sure that the input folder contains images with prefix {args.select_filename}'
     #import pdb; pdb.set_trace()
     filenames = sorted(list(filenames))
     frames = []
@@ -39,7 +40,7 @@ def main(args):
         if args.show_every < 0 or i % args.show_every == 0:
             new_frame = Image.open(filename)
             frames.append(new_frame)
-    
+
     # Save into a GIF file that loops forever
     frames[0].save(args.output_filename, format='GIF',
                    append_images=frames[1:],

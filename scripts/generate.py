@@ -17,7 +17,7 @@ from diffusers import DDPMScheduler
 from diffusers import DDPMPipeline
 from accelerate import Accelerator
 
-sys.path.insert(0, '%s'%os.path.join(os.path.dirname(__file__), '../src/'))
+sys.path.insert(0, f"{os.path.join(os.path.dirname(__file__), '../src/')}")
 from markup2im_constants import get_image_size, get_input_field, get_encoder_model_type, get_color_mode
 from markup2im_models import create_image_decoder, encode_text
 
@@ -90,8 +90,7 @@ def process_args(args):
                         type=int, default=1234,
                         help=('Random seed for data loader. Shouldn\'t be changed to be comparable to numbers reported in the paper.'
                         ))
-    parameters = parser.parse_args(args)
-    return parameters
+    return parser.parse_args(args)
 
 def load_pipeline(image_decoder, model_path):
     state_dict = torch.load(model_path, map_location='cpu')
@@ -100,11 +99,10 @@ def load_pipeline(image_decoder, model_path):
         k_out = k.replace('module.', '')
         state_dict_new[k_out] = state_dict[k]
     image_decoder.load_state_dict(state_dict_new)
-    
+
     accelerator = Accelerator(mixed_precision='no')
     noise_scheduler = DDPMScheduler(num_train_timesteps=1000, tensor_format="pt")
-    pipeline = DDPMPipeline(unet=image_decoder, scheduler=noise_scheduler)
-    return pipeline
+    return DDPMPipeline(unet=image_decoder, scheduler=noise_scheduler)
 
 
 def evaluate(dataloader, tokenizer, text_encoder, pipeline, output_dir, num_batches, save_intermediate_every=-1):
@@ -112,6 +110,7 @@ def evaluate(dataloader, tokenizer, text_encoder, pipeline, output_dir, num_batc
     os.makedirs(gold_dir, exist_ok=True)
     pred_dir = os.path.join(output_dir, "images_pred")
     os.makedirs(pred_dir, exist_ok=True)
+    swap_step = -1
     for step, batch in tqdm.tqdm(enumerate(dataloader)):
         gold_images = batch['gold_images']
         filenames = batch['filenames']
@@ -122,22 +121,18 @@ def evaluate(dataloader, tokenizer, text_encoder, pipeline, output_dir, num_batc
             formula = tokenizer.decode(input_id, skip_special_symbols=True).replace('<|endoftext|>', '')
             print (f'{iii:04d}: {formula}')
             print ()
-        swap_step = -1
-        t = 0
-        for _, pred_images in pipeline.run_clean(
+        for t, (_, pred_images) in enumerate(pipeline.run_clean(
             batch_size = input_ids.shape[0],
             generator=torch.manual_seed(0),
             encoder_hidden_states = encoder_hidden_states,
             attention_mask=masks,
             swap_step=swap_step,
-            ):
+            )):
             pred_images = pipeline.numpy_to_pil(pred_images)
             if save_intermediate_every > 0:
                 if t % save_intermediate_every == 0:
                     for filename, gold_image, pred_image in zip(filenames, gold_images, pred_images):
-                        pred_image.save(os.path.join(pred_dir, filename + f'_{t:04d}.png'))
-            t += 1
-
+                        pred_image.save(os.path.join(pred_dir, f'{filename}_{t:04d}.png'))
         for filename, gold_image, pred_image in zip(filenames, gold_images, pred_images):
             gold_image.save(os.path.join(gold_dir, filename))
             pred_image.save(os.path.join(pred_dir, filename))
@@ -175,17 +170,13 @@ def main(args):
         print (f'Using default color mode for dataset {args.dataset_name}')
         color_mode = get_color_mode(args.dataset_name)
         print (f'Default color mode: {color_mode}')
-    args.color_mode = color_mode 
+    args.color_mode = color_mode
     assert args.color_mode in ['grayscale', 'rgb']
-    if args.color_mode == 'grayscale':
-        args.color_channels = 1
-    else:
-        args.color_channels = 3
-
+    args.color_channels = 1 if args.color_mode == 'grayscale' else 3
     # Load data
     dataset = load_dataset(args.dataset_name, split=args.split)
     dataset = dataset.shuffle(seed=args.seed1)
-   
+
     # Filter data (such as 433d71b530.png)
     if args.select_filename.lower() != 'none':
         print (f'Only running inference on {args.select_filename}')
@@ -196,27 +187,27 @@ def main(args):
 
     # Load input encoder
     text_encoder = AutoModel.from_pretrained(args.encoder_model_type).cuda()
-  
+
     # Preprocess data to form batches
     def preprocess_formula(formula):
       example = tokenizer(formula, truncation=True, max_length=args.max_input_length)
       input_ids = example['input_ids']
       attention_mask = example['attention_mask']
       return input_ids, attention_mask
-    
+
     def transform(examples):
-        gold_images = [image for image in examples["image"]]
+        gold_images = list(examples["image"])
         formulas_and_masks = [preprocess_formula(formula) for formula in examples[args.input_field]]
         formulas = [item[0] for item in formulas_and_masks]
         masks = [item[1] for item in formulas_and_masks]
         filenames = examples['filename']
         return {'input_ids': formulas, 'attention_mask': masks, 'filenames': filenames, 'gold_images': gold_images}
-    
+
     dataset.set_transform(transform)
 
     def collate_fn(examples):
         eos_id = tokenizer.encode(tokenizer.eos_token)[0] # legacy code, might be unnecessary
-        max_len = max([len(example['input_ids']) for example in examples]) + 1
+        max_len = max(len(example['input_ids']) for example in examples) + 1
         examples_out = []
         for example in examples:
             example_out = {}
@@ -231,9 +222,9 @@ def main(args):
         filenames = [example['filenames'] for example in examples]
         gold_images = [example['gold_images'] for example in examples]
         batch['filenames'] = filenames
-        batch['gold_images'] = gold_images 
+        batch['gold_images'] = gold_images
         return batch
-    
+
     torch.manual_seed(args.seed2)
     random.seed(args.seed2)
     np.random.seed(args.seed2)
@@ -245,12 +236,12 @@ def main(args):
     # forward a fake batch to figure out cross_attention_dim
     hidden_states = encode_text(text_encoder, torch.zeros(1,1).long().cuda(), None)
     cross_attention_dim = hidden_states.shape[-1]
-    
+
     image_decoder = create_image_decoder(image_size=args.image_size, color_channels=args.color_channels, \
             cross_attention_dim=cross_attention_dim)
     image_decoder = image_decoder.cuda()
     pipeline = load_pipeline(image_decoder, args.model_path)
-    
+
     evaluate(eval_dataloader, tokenizer, text_encoder, pipeline, args.output_dir, args.num_batches, args.save_intermediate_every)
 
 
